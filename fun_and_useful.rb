@@ -2,11 +2,12 @@
 require 'open-uri'
 require 'nokogiri'
 require 'deep_enumerable'
+require 'pp'
 
 # https://www.tiobe.com/tiobe-index/
 languages = [
 'Java', 'C', 'C++', 'C#', 'Python', 'Visual Basic .NET', 'PHP', 'JavaScript',
-'Delphi/Object Pascal', 'Swift', 'Perl', 'Ruby', 'Assembly language', 'R',
+'Delphi/Object Pascal', 'Swift', 'Perl', 'Ruby', 'Assembly', 'R',
 'Visual Basic', 'Objective-C', 'Go', 'MATLAB', 'PL/SQL', 'Scratch', 'SAS',
 'D', 'Dart', 'ABAP', 'COBOL', 'Ada', 'Fortran', 'Transact-SQL', 'Lua', 'Scala',
 'Logo', 'F#', 'Lisp', 'LabVIEW', 'Prolog', 'Haskell', 'Scheme', 'Groovy',
@@ -14,10 +15,11 @@ languages = [
 'Julia', 'Alice', 'VHDL', 'Awk']
 
 def search_google(query)
-  wait_time = (0.2 + Random.rand()).round(2)
+  wait_time = (1.2 + 3*Random.rand()).round(2)
   query_str = URI::encode(query)
   query_url = "http://www.google.com/search?hl=en&q=#{query_str}"
   puts "Waiting #{wait_time} seconds, then fetching: #{query_url}"
+  sleep(wait_time)
   response = open(query_url, 'User-Agent' => 'Chrome')
   if response.status.first != "200"
     puts "Error fetching: #{query_url} - #{response.status}"
@@ -54,10 +56,10 @@ def search_language(lang)
   query_components =
    [[lang, "programming language", nil],
     [lang, "programming language", :fun],
-    [lang, "programming language", :useful]]
+    [lang, "programming language", :powerful]]
 
-  query_components.map do |(lang, fillter, modifier)|
-    query_str = [lang, fillter, modifier].join(" ").strip
+  query_components.map do |(lang, filler, modifier)|
+    query_str = "\"#{lang} #{filler}\" #{modifier}".strip
 
     [[lang, modifier], maybe_search_google(query_str)]
   end
@@ -69,12 +71,26 @@ def n_results(results_html)
   text.gsub(/\D/, '').to_i
 end
 
-def aggregate_results
+def aggregate_results(languages)
   individual_counts =
     languages.map{|lang| search_language(lang)}.flatten(1)
              .map{|(query, html)| [query, n_results(html)]}
 
-  individual_counts.map{|(lang, type), count| {lang => {type => count}}}
+  individual_counts.map{|(lang, type), count| {lang => {(type || :all) => count}}}
     .inject({}){|a, b| a.merge(b) {|key, a, b| a.merge(b)} }
 end
+
+def normalize_results(agg_results)
+  agg_results.shallow_map_values do |counts|
+    {all: counts[:all],
+     fun: (counts[:fun] / counts[:all].to_f).round(3),
+     powerful: (counts[:powerful] / counts[:all].to_f).round(3)}
+  end
+end
+
+def write_agg_csv(aggs)
+  aggs.map{|k,h| [k, h[:all], h[:fun], h[:powerful]].join(",")}.join("\n")
+end
+
+puts write_agg_csv(normalize_results(aggregate_results(languages)))
 
